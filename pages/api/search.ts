@@ -15,14 +15,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const method = 'GET';
     const domain = 'https://api-gateway.coupang.com';
     const requestPath = '/v2/providers/affiliate_open_api/apis/openapi/v1/products/search';
-    const timestamp = Date.now();
     const query = `?keyword=${encodeURIComponent(keyword)}&limit=5`;
     const urlPath = `${requestPath}${query}`;
-    const datetime = moment().utc().format('YYYYMMDDTHHmmss') + 'Z';
-    const message = `${datetime}${method}${urlPath}`;
-
-    const signature = crypto
-        .createHmac('sha256', SECRET_KEY)
+    const datetime = moment.utc().format("YYYYMMDD'T'HHmmss'Z'");
+    const message = `${datetime}${method}${requestPath}${query}`;
+    const signature = crypto.createHmac('sha256', SECRET_KEY)
         .update(message)
         .digest('hex');
 
