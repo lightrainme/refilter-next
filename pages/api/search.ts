@@ -12,16 +12,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({error: 'keyword 쿼리 파라미터가 필요합니다.'});
     }
 
-    const method = 'GET';
-    const domain = 'https://api-gateway.coupang.com';
-    const requestPath = '/v2/providers/affiliate_open_api/apis/openapi/v1/products/search';
+    const method = "GET";
+    const requestPath = `/v2/providers/affiliate_open_api/apis/openapi/v1/products/search`;
     const query = `?keyword=${encodeURIComponent(keyword)}&limit=5`;
     const urlPath = `${requestPath}${query}`;
-    const datetime = moment.utc().format("YYYYMMDD'T'HHmmss'Z'");
-    const message = `${datetime}${method}${requestPath}${query}`;
-    const signature = crypto.createHmac('sha256', SECRET_KEY)
-        .update(message)
-        .digest('hex');
+    const datetime = moment().utc().format("ddd, DD MMM YYYY HH:mm:ss [GMT]");
+
+    const message = `${datetime}${method}${requestPath}`;
+
+    const signature = crypto
+      .createHmac("sha256", SECRET_KEY)
+      .update(message)
+      .digest("hex");
+
+    const domain = 'https://api-gateway.coupang.com';
 
     const authorizationHeader = `CEA algorithm=HmacSHA256, access-key=${ACCESS_KEY}, signed-date=${datetime}, signature=${signature}`;
 
