@@ -1,23 +1,20 @@
 import crypto from 'crypto';
-import moment from 'moment';
 
-export const generateHmac = (
-  method: string,
-  url: string,
-  secretKey: string,
-  accessKey: string
-): string => {
-  const datetime = moment.utc().format('YYMMDD[T]HHmmss[Z]');
-  const parts = url.split('?');
-  const path = parts[0];
-  const query = parts[1] ? `?${parts[1]}` : '';
+export function generateHmac(method: string, fullPath: string) {
+  const accessKey = process.env.COUPANG_ACCESS_KEY || '';
+  const secretKey = process.env.COUPANG_SECRET_KEY || '';
 
-  const message = `${datetime}${method}${path}${query}`;
+  const [path, queryString] = fullPath.split('?');
+  const now = new Date();
+  const timestamp = `${now.getUTCFullYear().toString().slice(2)}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}T${String(now.getUTCHours()).padStart(2, '0')}${String(now.getUTCMinutes()).padStart(2, '0')}${String(now.getUTCSeconds()).padStart(2, '0')}Z`;
 
-  const signature = crypto
-    .createHmac('sha256', secretKey)
+  const message = timestamp + method + path + (queryString || '');
+
+  const signature = crypto.createHmac('sha256', secretKey)
     .update(message)
     .digest('hex');
 
-  return `CEA algorithm=HmacSHA256, access-key=${accessKey}, signed-date=${datetime}, signature=${signature}`;
-};
+  const authorization = `CEA algorithm=HmacSHA256, access-key=${accessKey}, signed-date=${timestamp}, signature=${signature}`;
+
+  return { authorization, timestamp };
+}

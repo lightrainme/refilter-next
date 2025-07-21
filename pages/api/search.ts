@@ -1,60 +1,57 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import crypto from 'crypto';
-import moment from 'moment';
+import { generateHmac } from '@/lib/hmacGenerator';
 
-const ACCESS_KEY = process.env.COUPANG_ACCESS_KEY!;
-const SECRET_KEY = process.env.COUPANG_SECRET_KEY!;
+const domain = 'https://api-gateway.coupang.com';
+const path = '/v2/providers/affiliate_open_api/apis/openapi/products/search';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    const { keyword } = req.query;
+  const keyword = req.method === 'GET' ? req.query.keyword : req.body.keyword;
 
-    if (!keyword || typeof keyword !== 'string') {
-        return res.status(400).json({error: 'keyword 쿼리 파라미터가 필요합니다.'});
-    }
+  if (!keyword || typeof keyword !== 'string') {
+    return res.status(400).json({ error: 'keyword 파라미터가 필요합니다.' });
+  }
 
-    const method = "GET";
-    const requestPath = `/v2/providers/affiliate_open_api/apis/openapi/v1/products/search`;
-    const query = `?keyword=${encodeURIComponent(keyword)}&limit=5`;
-    const urlPath = `${requestPath}${query}`;
-    const datetime = moment().utc().format("ddd, DD MMM YYYY HH:mm:ss [GMT]");
+  try {
+    const method = 'GET';
+    const queryString = new URLSearchParams({
+      keyword,
+      limit: '10',
+    }).toString();
 
-    const message = `${datetime}${method}${requestPath}`;
+    const { authorization, timestamp }: { authorization: string; timestamp: string } = await generateHmac(method, path);
 
-    const signature = crypto
-      .createHmac("sha256", SECRET_KEY)
-      .update(message)
-      .digest("hex");
+    const fullUrl = `${domain}${path}?${queryString}`;
 
-    const domain = 'https://api-gateway.coupang.com';
+    // ✅ 디버깅 로그
+    console.log("✅ HMAC Signature Debug Info:");
+    console.log("timestamp:", timestamp);
+    console.log("method:", method);
+    console.log("path:", path);
+    console.log("full request URL:", fullUrl);
+    console.log("authorization header:", authorization);
 
-    const authorizationHeader = `CEA algorithm=HmacSHA256, access-key=${ACCESS_KEY}, signed-date=${datetime}, signature=${signature}`;
-
-    console.log('datetime:', datetime);
-    console.log('message:', message);
-    console.log('signature:', signature);
-    console.log('url:', `${domain}${urlPath}`);
-    console.log('authorizationHeader:', authorizationHeader);
-
-    const headers = {
-        'Authorization': authorizationHeader,
+    const response = await fetch(fullUrl, {
+      method,
+      headers: {
+        Authorization: authorization,
         'Content-Type': 'application/json',
-    };
+      },
+    });
 
-    try {
-        const coupangRes = await fetch(`${domain}${urlPath}`, {
-            method,
-            headers,
-        });
+    console.log("response status:", response.status);
 
-        if(!coupangRes.ok) {
-            const error = await coupangRes.text();
-            return res.status(coupangRes.status).json({error});
-        }
-
-        const data = await coupangRes.json();
-        return res.status(200).json(data);
-    } catch(error: any) {
-        return res.status(500).json({ error: '쿠팡 API 호출 실패', detail: error.message})
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(response.status).json({ error: errorText });
     }
 
+    const data = await response.json();
+    return res.status(200).json({ keyword, data });
+  } catch (error: any) {
+    console.error("❌ API 호출 에러:", error);
+    return res.status(500).json({
+      error: 'API 호출 중 오류 발생',
+      detail: error.message,
+    });
+  }
 }
