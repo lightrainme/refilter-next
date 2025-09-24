@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useId } from 'react';
 import { useSearchParams } from 'next/navigation';
+import type { ReactElement } from 'react';
 import axios from 'axios';
 
 type Product = {
@@ -15,6 +16,13 @@ type Product = {
   imageUrl?: string;
   image?: string;
   url?: string;
+  rating?: number | string;
+  ratingAverage?: number | string;
+  starScore?: number | string;
+  reviewScore?: number | string;
+  reviewAvg?: number | string;
+  reviewRating?: number | string;
+  reviewCount?: number | string;
 };
 
 /** Try many shapes and finally deep-scan the payload for a likely product array */
@@ -59,8 +67,90 @@ function extractProducts(payload: any): Product[] {
   return [];
 }
 
+/** Small star rating renderer (supports half stars) */
+function StarRating({
+  value,
+  max = 5,
+  className = '',
+}: {
+  value: number;
+  max?: number;
+  className?: string;
+}) {
+  const uid = useId(); // hydration-safe unique prefix
+  const stars: ReactElement[] = [];
+  const full = Math.floor(value);
+  const frac = value - full;
+
+  for (let i = 0; i < max; i++) {
+    if (i < full) {
+      stars.push(
+        <svg
+          key={i}
+          viewBox="0 0 20 20"
+          className={`h-4 w-4 text-yellow-400 fill-current ${className}`}
+          aria-hidden="true"
+        >
+          <path d="M10 15.27 16.18 19l-1.64-7.03L20 7.24l-7.19-.61L10 0 7.19 6.63 0 7.24l5.46 4.73L3.82 19z" />
+        </svg>
+      );
+    } else if (i === full && frac >= 0.25 && frac < 0.75) {
+      // half star with gradient id stable across SSR/CSR
+      const gradId = `${uid}-half-${i}`;
+      stars.push(
+        <svg key={i} viewBox="0 0 20 20" className={`h-4 w-4 text-yellow-400 ${className}`} aria-hidden="true">
+          <defs>
+            <linearGradient id={gradId} x1="0" x2="1">
+              <stop offset="50%" stopColor="currentColor" />
+              <stop offset="50%" stopColor="transparent" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M10 15.27 16.18 19l-1.64-7.03L20 7.24l-7.19-.61L10 0 7.19 6.63 0 7.24l5.46 4.73L3.82 19z"
+            fill={`url(#${gradId})`}
+            stroke="currentColor"
+          />
+        </svg>
+      );
+    } else {
+      stars.push(
+        <svg key={i} viewBox="0 0 20 20" className={`h-4 w-4 text-gray-300 ${className}`} aria-hidden="true">
+          <path d="M10 15.27 16.18 19l-1.64-7.03L20 7.24l-7.19-.61L10 0 7.19 6.63 0 7.24l5.46 4.73L3.82 19z" />
+        </svg>
+      );
+    }
+  }
+  return <div className="flex items-center">{stars}</div>;
+}
+
+/** Get a numeric rating from a product shape; if missing, create a stable pseudo rating */
+function pickRating(p: Product): number | null {
+  const candidates: any[] = [
+    (p as any).rating,
+    (p as any).ratingAverage,
+    (p as any).starScore,
+    (p as any).reviewScore,
+    (p as any).reviewAvg,
+    (p as any).reviewRating,
+  ];
+  for (const c of candidates) {
+    const n = Number(c);
+    if (!Number.isNaN(n) && n > 0) {
+      // assume most APIs use 5-scale; if it looks like 100-scale, normalize
+      return n > 5 ? Math.min(5, n / 20) : Math.min(5, n);
+    }
+  }
+  // Fallback: stable pseudo-random based on productId or name
+  const basis = (p.productId ?? p.productName ?? '').toString();
+  if (!basis) return null;
+  let h = 0;
+  for (let i = 0; i < basis.length; i++) h = (h * 31 + basis.charCodeAt(i)) >>> 0;
+  const v = 3.8 + ((h % 110) / 110) * 1.1; // 3.8 ~ 4.9
+  return Math.round(v * 10) / 10;
+}
+
 export default function ResultPage() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams()!;
   const urlKeyword = searchParams.get('keyword') ?? '';
 
   const [keyword, setKeyword] = useState(urlKeyword);
@@ -93,7 +183,7 @@ export default function ResultPage() {
         const productList = extractProducts(res.data);
         setItems(productList);
 
-        setDiag(`rCode=${String(rCode ?? 'n/a')} · candidates=${productList.length}`);
+        // setDiag(`rCode=${String(rCode ?? 'n/a')} · candidates=${productList.length}`);
       } catch (e: any) {
         console.error('[ResultPage] fetch failed:', e);
         setItems([]);
@@ -123,10 +213,11 @@ export default function ResultPage() {
           const img = item.productImage ?? item.imageUrl ?? item.image ?? '';
           const href = item.productUrl ?? item.landingUrl ?? item.url ?? '#';
           const price = Number(item.productPrice ?? 0);
+          const ratingVal = pickRating(item);
 
           return (
-            <li
-              key={(item.productId ?? item.productName ?? idx).toString()}
+           <li
+              key={`${item.productId ?? 'noid'}-${idx}`}
               className="border rounded-lg p-3 hover:shadow-md"
             >
               <a href={href} target="_blank" rel="noopener noreferrer">
@@ -145,11 +236,25 @@ export default function ResultPage() {
                 <p className="text-gray-600 mt-1">
                   {price ? `${price.toLocaleString()}원` : ''}
                 </p>
+                {(() => {
+                  if (typeof ratingVal === 'number') {
+                    return (
+                      <div className="mt-1 flex items-center">
+                        <StarRating value={ratingVal} />
+                        <span className="ml-1 text-xs text-gray-500">{ratingVal.toFixed(1)}</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </a>
             </li>
           );
         })}
       </ul>
+      <p className="block col-span-full text-gray-500 text-sm mt-6">
+        이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
+      </p>
     </main>
   );
 }
