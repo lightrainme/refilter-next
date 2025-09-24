@@ -1,70 +1,43 @@
 'use client';
 
-import React, { useState } from 'react';
-import axios from 'axios';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { useState, FormEvent } from 'react';
 
 export default function SearchPage() {
   const [keyword, setKeyword] = useState('');
-  const [results, setResults] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-  const handleSearch = async () => {
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
     if (!keyword.trim()) return;
-    setLoading(true);
-    try {
-      const response = await axios.get(`/api/search?keyword=${encodeURIComponent(keyword)}`);
-      console.log('응답 데이터:', response.data);
-      const resultData = response.data.data;
-      const productList = resultData.productData;
-
-      if(Array.isArray(productList)){
-        setResults(productList);
-      } else {
-        console.log('결과가 배열이 아닙니다', productList);
-        setResults([]);
-      }
-    } catch (error) {
-      console.error('검색 실패:', error);
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
+    router.push(`/result?keyword=${encodeURIComponent(keyword.trim())}`);
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">상품 검색</h1>
-      <div className="flex gap-2 mb-4">
-        <input
-          type="text"
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          placeholder="검색어를 입력하세요"
-          className="flex-1 border px-4 py-2 rounded-md"
-        />
-        <button onClick={handleSearch} className="bg-blue-600 text-white px-4 py-2 rounded-md">
-          검색
-        </button>
-      </div>
-      {loading ? (
-        <p>검색 중...</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {results.map((item, idx) => (
-            <a
-              key={idx}
-              href={item.productUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="border rounded-lg p-4 hover:shadow-md"
-            >
-              <img src={item.productImage} alt={item.productName} className="w-full h-48 object-cover mb-2" />
-              <h2 className="text-lg font-medium">{item.productName}</h2>
-              <p className="text-gray-600">₩{item.productPrice.toLocaleString()}</p>
-            </a>
-          ))}
+    <div className="min-h-screen bg-gradient-to-b from-fuchsia-500 to-indigo-600">
+      <div className="max-w-xl mx-auto pt-28 px-6">
+        {/* 로고: 비율 유지 + 반응형 */}
+        <div className="relative w-48 sm:w-56 md:w-64 aspect-[3/1] mx-auto mb-8">
+          <Image src="/logo.svg" alt="로고" fill className="object-contain" priority />
         </div>
-      )}
+
+        {/* 중앙 검색창 (결과는 없음) */}
+        <form onSubmit={onSubmit} className="flex gap-2">
+          <input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="검색어를 입력하세요"
+            className="flex-1 border px-4 py-3 rounded-md bg-white"
+          />
+          <button
+            type="submit"
+            className="px-5 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            검색
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
