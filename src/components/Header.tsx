@@ -19,10 +19,13 @@ export default function Header({ initialKeyword = '' }: HeaderProps) {
   };
 
   return (
-    <header className="w-full bg-white/80 backdrop-blur border-b">
+    <header className="w-full bg-gray-100 backdrop-blur">
       <div className="max-w-5xl mx-auto flex items-center gap-4 p-4">
         {/* 로고 */}
-        <div className="relative w-32 h-10">
+        <div 
+          className="relative w-32 h-10 cursor-pointer"
+          onClick={() => router.push('/search')}
+        >
           <Image src="/logo.svg" alt="로고" fill className="object-contain" priority />
         </div>
 
@@ -32,11 +35,11 @@ export default function Header({ initialKeyword = '' }: HeaderProps) {
             value={kw}
             onChange={(e) => setKw(e.target.value)}
             placeholder="검색어를 입력하세요"
-            className="flex-1 border px-4 py-2 rounded-md bg-white"
+            className="flex-1 border px-4 py-2 rounded-md bg-white placeholder-gray-400flex-1 border border-gray-200 px-4 py-3 rounded-md bg-white placeholder-gray-400"
           />
           <button
             type="submit"
-            className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white"
+            className="cursor-pointer px-6 py-2 rounded-md bg-purple-900 shadow hover:bg-indigo-900 text-white border-purple-950"
           >
             검색
           </button>
