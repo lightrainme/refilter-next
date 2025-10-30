@@ -32,9 +32,21 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // ✅ 캐시 무효화를 위한 버전 쿼리 추가 (매번 빌드 시 갱신)
+  const manifestVersion = new Date().getTime();
+
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased w-screen h-screen bg-gray-100`}>
+    <html lang="ko" suppressHydrationWarning>
+      {/* ✅ head 영역에 manifest 링크 추가 */}
+      <head>
+        <link rel="manifest" href={`/manifest.json?v=${manifestVersion}`} />
+        <meta name="theme-color" content="#5d1e79" />
+        <link rel="apple-touch-icon" href="/icons/android-chrome-512x512.png" />
+      </head>
+
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased w-screen h-screen bg-gray-100`}
+      >
         <LayoutWrapper>{children}</LayoutWrapper>
         <Footer />
         <ServiceWorkerRegister />
