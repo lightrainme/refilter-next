@@ -6,8 +6,8 @@ const urlsToCache = [
   '/',           // 메인 페이지
   '/search',     // 검색 페이지
   '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/icon/icon-192x192.png',
+  '/icon/icon-512x512.png'
 ];
 
 // 설치 단계: 캐시 저장
