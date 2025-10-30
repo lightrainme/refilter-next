@@ -20,8 +20,8 @@ export const metadata: Metadata = {
   description: "진짜 리뷰만 골라보세요. Refilter가 진짜를 필터링 해드립니다",
   icons: {
     icon: [
-      { url: "/icons/android-chrome-192x192.png", type: "image/png" },
-      { url: "/icons/android-chrome-512x512.png", type: "image/png" },
+      { url: "/icons/icon-192x192.png", type: "image/png" },
+      { url: "/icons/icon-512x512.png", type: "image/png" },
     ],
     shortcut: { url: "/favicon.ico", type: "image/x-icon" },
   },

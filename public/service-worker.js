@@ -1,13 +1,13 @@
 // 캐시 이름 정의
-const CACHE_NAME = 'refilter-cache-v1';
+const CACHE_NAME = 'refilter-cache-v2';
 
 // 캐시할 파일 목록
 const urlsToCache = [
   '/',           // 메인 페이지
   '/search',     // 검색 페이지
   '/manifest.json',
-  '/icons/android-chrome-192x192.png',
-  '/icons/android-chrome-512x512.png'
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png'
 ];
 
 // 설치 단계: 캐시 저장
