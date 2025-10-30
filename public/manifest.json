@@ -1,7 +1,7 @@
 {
     "name": "RefilterCoupang",
     "short_name": "RefilterCoupang",
-    "start_url": "/",
+    "start_url": "/search?v=beta",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#5d1e79",
