@@ -39,7 +39,7 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       {/* ✅ head 영역에 manifest 링크 추가 */}
       <head>
-        <link rel="manifest" href={`/manifest.json?v=${manifestVersion}`} />
+        <link rel="manifest" href={`/manifest-beta.json?v=${manifestVersion}`} />
         <meta name="theme-color" content="#5d1e79" />
         <link rel="apple-touch-icon" href="/icons/android-chrome-512x512.png" />
       </head>
