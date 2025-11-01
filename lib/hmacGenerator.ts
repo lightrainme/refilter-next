@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-export function generateHmac(method: string, fullPath: string) {
+export function generateHmac(method: string, fullPath: string, query: string = "") {
   const accessKey = process.env.COUPANG_ACCESS_KEY || '';
   const secretKey = process.env.COUPANG_SECRET_KEY || '';
 
