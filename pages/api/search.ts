@@ -50,8 +50,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const uncached = products.filter((p: any) => !cache[p.productName]);
     const uncachedNames = uncached.map((p: any) => p.productName);
 
-    // ✅ 한 번에 요약 요청
+    // ✅ 한 번에 요약 요청 (ResultClient에서 처리하므로 서버에서는 비활성화)
     let summaries: Record<string, any> = {};
+    /*
     if (uncachedNames.length > 0) {
       try {
         const summaryRes = await axios.post("http://localhost:3000/api/summary", {
@@ -67,6 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.error("❌ Refilter 요약 요청 실패:", err);
       }
     }
+    */
 
     // ✅ 캐시 + 새 요약 결합
     const enriched = products.map((product: any) => {
