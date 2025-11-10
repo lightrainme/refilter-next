@@ -28,6 +28,13 @@ type Product = {
   cons?: string[];
 };
 
+// ✅ Summary API 응답 구조 정의
+type SummaryResponse = {
+  name: string;
+  pros: string[];
+  cons: string[];
+};
+
 export default function ResultClient() {
   // ✅ URL에서 검색어 추출
   const searchParams = useSearchParams();
@@ -68,81 +75,77 @@ export default function ResultClient() {
     fetchResults();
   }, [keyword]);
 
-// ---------------------------------------------------------------------------
-// [요약 단계 useEffect]
-// - 검색 결과(items)가 로드된 뒤, 각 상품의 리뷰 요약을 비동기로 요청한다.
-// - 동시에 최대 3개의 요청만 실행(limit = 3) → 과부하 방지 + 속도 최적화
-// - 각 요청이 완료될 때마다 상태를 즉시 업데이트(setItems)
-// - 진행률(progress)과 현재 요약 중인 상품(currentSummarizing)을 실시간 반영
-// - hasFetchedSummary는 중복 실행 방지용 (React StrictMode 대비)
-// ---------------------------------------------------------------------------
-useEffect(() => {
-  if (items.length === 0 || hasFetchedSummary.current) return;
-  hasFetchedSummary.current = true;
+  // ---------------------------------------------------------------------------
+  // [요약 단계 useEffect]
+  // - 검색 결과(items)가 로드된 뒤, 각 상품의 리뷰 요약을 비동기로 요청한다.
+  // - 동시에 최대 3개의 요청만 실행(limit = 3)
+  // - 각 요청이 완료될 때마다 상태를 즉시 업데이트(setItems)
+  // - 진행률(progress)과 현재 요약 중인 상품(currentSummarizing)을 실시간 반영
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (items.length === 0 || hasFetchedSummary.current) return;
+    hasFetchedSummary.current = true;
 
-  const limit = 3; // 동시에 처리할 최대 요청 수
-  let active = 0;
-  let index = 0;
+    const limit = 3; // 동시에 처리할 최대 요청 수
+    let active = 0;
+    let index = 0;
 
-  const runNext = async () => {
-    if (index >= items.length) return; // ✅ 모든 상품을 다 돌았으면 종료
+    const runNext = async () => {
+      if (index >= items.length) return; // ✅ 모든 상품을 다 돌았으면 종료
 
-    const product = items[index++]; // 다음 상품 하나를 꺼냄
-    if (!product.productName) {
-      // 이름 없으면 스킵 후 다음으로
-      return runNext();
-    }
+      const product = items[index++]; // 다음 상품 하나를 꺼냄
+      if (!product.productName) return runNext(); // 이름 없으면 스킵
 
-    active++;
-    // ✅ 요약 시작 전: UI 상단에 현재 상품명 표시
-    setCurrentSummarizing(product.productName);
+      active++;
+      setCurrentSummarizing(product.productName);
 
-    try {
-      // ✅ 실제 GPT 요약 요청 (서버 /api/summary.ts 호출)
-      console.log("🧠 요약 시작:", product.productName);
-      const res = await axios.post("/api/summary", {
-        productName: product.productName,
-      });
-      const summaryData = Array.isArray(res.data) ? res.data[0] : res.data;
+      try {
+        console.log("🧠 요약 시작:", product.productName);
+        // ✅ summary API 호출 (제네릭 타입 지정)
+        const res = await axios.post<SummaryResponse[]>("/api/summary", {
+          productName: product.productName,
+        });
+        const summaryData = Array.isArray(res.data) ? res.data[0] : res.data;
 
-      // ✅ 요청이 끝난 상품을 즉시 갱신 → 실시간으로 화면에 반영됨
-      setItems((prev) =>
-        prev.map((p) =>
-          p.productName === product.productName
-            ? { ...p, ...(summaryData || {}) }
-            : p
-        )
-      );
-    } catch (err) {
-      console.error("❌ 요약 실패:", err);
-    } finally {
-      // ✅ 성공/실패와 관계없이 진행률 1 증가
-      setProgress((prev) => prev + 1);
-      active--;
-      runNext(); // 다음 상품 요약 시작
+        // ✅ 요청이 끝난 상품을 즉시 갱신하고, 요약 완료된 상품을 상단으로 정렬
+        setItems((prev) => {
+          // 1. pros, cons만 업데이트하여 불필요한 데이터 변경 최소화
+          const updated = prev.map((p) =>
+            p.productName === product.productName
+              ? { ...p, pros: summaryData?.pros || [], cons: summaryData?.cons || [] }
+              : p
+          );
 
-      // ✅ 모든 요약이 끝났을 때 현재 상품 이름 초기화
-      if (index >= items.length && active === 0) {
-        setCurrentSummarizing("");
+          // 2. 요약이 완료된 상품을 상단으로 이동시켜 시각적 진행감 제공
+          return updated.sort((a, b) => {
+            const aDone = a.pros?.length ? 1 : 0;
+            const bDone = b.pros?.length ? 1 : 0;
+            return bDone - aDone; // pros가 있는 항목을 앞으로
+          });
+        });
+      } catch (err) {
+        console.error("❌ 요약 실패:", err);
+      } finally {
+        // ✅ 성공/실패와 관계없이 진행률 1 증가
+        setProgress((prev) => prev + 1);
+        active--;
+        runNext(); // 다음 상품 요약 시작
+
+        // ✅ 모든 요약이 끝났을 때 현재 상품 이름 초기화
+        if (index >= items.length && active === 0) {
+          setCurrentSummarizing("");
+        }
       }
-    }
-  };
+    };
 
-  // ✅ 동시에 limit 개의 요청 실행
-  for (let i = 0; i < limit; i++) {
-    runNext();
-  }
-}, [items]);
+    // ✅ 동시에 limit 개의 요청 실행
+    for (let i = 0; i < limit; i++) {
+      runNext();
+    }
+  }, [items]);
 
   // ✅ 진행률 계산
   const progressPercent = total > 0 ? Math.round((progress / total) * 100) : 0;
-
-  // ---------------------------------------------------------------------------
-  // [상단 진행 시각화 영역]
-  // - 사용자가 “기다린다”는 느낌 대신 “AI가 일하고 있다”는 느낌을 주기 위한 UI
-  // - progressPercent: 전체 요약 진행률
-  // - currentSummarizing: 현재 GPT가 처리 중인 상품 이름
-  // ---------------------------------------------------------------------------
 
   // ✅ 렌더링
   return (
@@ -169,10 +172,9 @@ useEffect(() => {
         <p className="text-gray-600">검색 결과가 없습니다.</p>
       )}
 
-      {/* 상단 진행 상태 영역 - 심리적 보상용 */}
+      {/* 상단 진행 상태 영역 */}
       {!loading && items.length > 0 && (
         <div className="mb-4">
-          {/* 진행률 바 */}
           <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
               className="h-2 bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-300"
@@ -211,22 +213,15 @@ useEffect(() => {
                 (Array.isArray(item.pros) && item.pros.length > 0) ||
                 (Array.isArray(item.cons) && item.cons.length > 0);
 
-              // ---------------------------------------------------------------------------
-              // [상품 카드 렌더링 부분]
-              // - hasSummary: pros/cons가 존재하면 true
-              // - 요약 전 상태에는 shimmer 애니메이션 적용 (AI 스캔 중 느낌)
-              // - Tailwind로 커스텀 키프레임을 globals.css에 추가해야 작동함
-              //   @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-              // ---------------------------------------------------------------------------
-
               return (
                 <li
                   key={`${item.productId ?? "noid"}-${idx}`}
                   className={`relative shadow-lg border bg-white rounded-lg p-3 hover:shadow-md transition duration-300 ${
-                    hasSummary ? "border-blue-200" : "border-gray-200 bg-[linear-gradient(110deg,#f5f5f5,45%,#ffffff,55%,#f5f5f5)] bg-[length:200%_100%] animate-[shimmer_1.2s_linear_infinite]"
+                    hasSummary
+                      ? "border-blue-200"
+                      : "border-gray-200 bg-[linear-gradient(110deg,#f5f5f5,45%,#ffffff,55%,#f5f5f5)] bg-[length:200%_100%] animate-[shimmer_1.2s_linear_infinite]"
                   }`}
                 >
-                  {/* 순위 */}
                   <span
                     className={`absolute -top-2 left-2 text-white text-xs font-semibold rounded-full px-2 py-2 shadow ${
                       idx === 0
@@ -241,7 +236,6 @@ useEffect(() => {
                     {idx + 1}위
                   </span>
 
-                  {/* 요약 상태 */}
                   <span
                     className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-1 rounded-full ${
                       hasSummary
