@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Sidebar from "../components/Sidebar";
 import Footer from "../components/Footer";
 import LayoutWrapper from "../components/LayoutWrapper";
 import ServiceWorkerRegister from "../components/ServiceWorkerRegister";
@@ -14,6 +15,7 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
 
 export const metadata: Metadata = {
   title: "진짜 Re뷰만 모으는 Refilter",
@@ -34,6 +36,23 @@ export default function RootLayout({
   // ✅ 캐시 무효화를 위한 버전 쿼리 추가 (매번 빌드 시 갱신)
   const manifestVersion = new Date().getTime();
 
+  const categories = [
+  {
+    name: "전자제품",
+    children: [
+      { name: "노트북" },
+      { name: "이어폰" },
+    ],
+  },
+  {
+    name: "생활가전",
+    children: [
+      { name: "공기청정기" },
+      { name: "로봇청소기" },
+    ],
+  },
+];
+
   return (
     <html lang="ko" suppressHydrationWarning>
       {/* ✅ head 영역에 manifest 링크 추가 */}
@@ -46,7 +65,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased w-screen h-screen bg-gray-100`}
       >
-        <LayoutWrapper>{children}</LayoutWrapper>
+        <div className="flex">
+          <Sidebar categories={categories} />
+          <LayoutWrapper>{children}</LayoutWrapper>
+        </div>
         <Footer />
         <ServiceWorkerRegister />
       </body>

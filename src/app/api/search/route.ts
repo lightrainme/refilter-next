@@ -30,7 +30,6 @@ function isExpired(item: any) {
 // ✅ Next.js App Router용 POST 핸들러
 // 상품 검색어(keyword)를 받아 쿠팡 오픈API를 호출한 뒤 결과를 반환합니다.
 export async function POST(req: NextRequest) {
-  // 요청 본문에서 keyword, limit, refresh 추출
   const { keyword, limit = 10, refresh = false } = await req.json();
   const subId = process.env.COUPANG_SUB_ID || "";
 
@@ -38,76 +37,88 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "keyword is required" }, { status: 400 });
   }
 
-  // ✅ HMAC 인증 헤더 생성
   const method = "GET";
   const pathUrl = `/v2/providers/affiliate_open_api/apis/openapi/v1/products/search?keyword=${encodeURIComponent(
     keyword
   )}&limit=${limit}&subId=${subId}`;
   const { authorization } = generateHmac(method, pathUrl);
 
-  try {
-    // ✅ 쿠팡 오픈 API 호출
-    const coupangRes = await axios.get(`https://api-gateway.coupang.com${pathUrl}`, {
-      headers: {
-        Authorization: authorization,
-        "Content-Type": "application/json",
-      },
-    });
+  // 스트리밍 응답 생성
+  const stream = new TransformStream();
+  const writer = stream.writable.getWriter();
+  const encoder = new TextEncoder();
 
-    // ✅ 광고 상품 제거 후 상위 10개만 사용
-    const allProducts = coupangRes.data?.data?.productData || [];
-    const products = allProducts.filter((p: any) => !p.isAdvertisingProduct).slice(0, 10);
+  (async () => {
+    try {
+      const coupangRes = await axios.get(`https://api-gateway.coupang.com${pathUrl}`, {
+        headers: {
+          Authorization: authorization,
+          "Content-Type": "application/json",
+        },
+      });
 
-    // ✅ 캐시 로드
-    const cache = loadCache();
+      const allProducts = coupangRes.data?.data?.productData || [];
+      const products = allProducts.filter((p: any) => !p.isAdvertisingProduct).slice(0, 10);
 
-    // ✅ 갱신이 필요한 상품(캐시 없음, 만료, 강제 갱신 요청)
-    const uncached = products.filter(
-      (p: any) => !cache[p.productName] || isExpired(cache[p.productName]) || refresh
-    );
-    const uncachedNames = uncached.map((p: any) => p.productName);
+      const cache = loadCache();
 
-    // ✅ 만료 또는 신규 항목은 /api/summary에 재요청
-    if (uncachedNames.length > 0) {
-      try {
-        const summaryRes = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/api/summary`, {
-          productNames: uncachedNames,
-          refresh, // 강제 갱신 파라미터 전달
-        });
-        const summaries = Array.isArray(summaryRes.data) ? summaryRes.data : [];
+      // ✅ 총 상품 개수 먼저 전송 (클라이언트 진행률 계산용)
+      writer.write(encoder.encode(JSON.stringify({ total: products.length }) + "\n"));
 
-        // ✅ 새로 받아온 요약을 캐시에 병합
-        summaries.forEach((s: any) => {
-          if (!s?.name) return;
-          cache[s.name] = {
-            ...s,
-            updatedAt: new Date().toISOString(),
-          };
-        });
-
-        // ✅ 캐시 파일 업데이트
-        fs.mkdirSync(path.dirname(cachePath), { recursive: true });
-        fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2), "utf8");
-      } catch (err) {
-        console.error("❌ 요약 요청 실패:", err);
+      // ✅ 1. 상품 리스트를 먼저 스트림으로 즉시 전송
+      for (const product of products) {
+        const name = product.productName;
+        const summary = cache[name] || { pros: [], cons: [] };
+        const enrichedProduct = { ...product, summary };
+        writer.write(encoder.encode(JSON.stringify({ partial: enrichedProduct }) + "\n"));
       }
+
+      // ✅ 2. 백그라운드에서 요약 업데이트 수행
+      (async () => {
+        for (const product of products) {
+          const name = product.productName;
+          let summary = cache[name];
+          if (!summary || isExpired(summary) || refresh) {
+            try {
+              const summaryRes = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/api/summary`, {
+                productNames: [name],
+                refresh,
+              });
+              const summaries = Array.isArray(summaryRes.data) ? summaryRes.data : [];
+              if (summaries[0]) {
+                summary = {
+                  ...summaries[0],
+                  updatedAt: new Date().toISOString(),
+                };
+                cache[name] = summary;
+                fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+                fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2), "utf8");
+              }
+            } catch (err) {
+              console.error("❌ GPT 요약 실패:", err);
+            }
+          }
+        }
+      })();
+
+      // ✅ 3. 모든 리스트 전송 완료 후 종료 신호 전송
+      writer.write(encoder.encode(JSON.stringify({ done: true }) + "\n"));
+    } catch (error: any) {
+      console.error("❌ Search API Error:", error.response?.data || error.message);
+      writer.write(encoder.encode(JSON.stringify({ error: "쿠팡 검색 API 요청 실패" }) + "\n"));
+    } finally {
+      writer.close();
     }
+  })();
 
-    // ✅ 캐시 + 새 요약 결합
-    const enriched = products.map((product: any) => {
-      const name = product.productName;
-      // 캐시에 저장된 요약 정보를 결합
-      const summary = cache[name] || { pros: [], cons: [] };
-      return { ...product, summary };
-    });
-
-    // ✅ 최종 결과 반환
-    return NextResponse.json({ results: enriched }, { status: 200 });
-  } catch (error: any) {
-    // API 요청 실패 시 오류 로그 출력
-    console.error("❌ Search API Error:", error.response?.data || error.message);
-    return NextResponse.json({ error: "쿠팡 검색 API 요청 실패" }, { status: 500 });
-  }
+  return new Response(stream.readable, {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Transfer-Encoding": "chunked",
+    },
+  });
 }
 
 // ✅ GET 요청도 지원하도록 별도 핸들러 추가

@@ -98,7 +98,7 @@ export default function SearchPage() {
             🟡 [카테고리 베스트 상품 섹션]
            ========================================================== */}
         <section>
-          <h2 className="text-2xl font-semibold mb-6 text-gray-800 text-center">
+          <h2 className="text-2xl font-extrabold mb-6 text-gray-800 text-center">
             카테고리별 베스트 1위 상품
           </h2>
 
@@ -118,64 +118,99 @@ export default function SearchPage() {
               {cards.map((item, idx) => (
                 <div
                   key={idx}
-                  className="border rounded-lg shadow-md p-4 flex flex-col items-center bg-white transition-transform hover:scale-105 hover:shadow-lg"
+                  className="border border-transparent rounded-lg shadow-md w-full p-4 flex flex-col items-center bg-white transition-transform hover:scale-105 hover:shadow-lg grid grid-rows-[auto_auto_1fr_auto_auto]"
                 >
-                  {/* 카테고리명 표시 (optional) */}
                   {item.categoryName && (
-                    <p className="text-xs text-gray-500 mb-1">{item.categoryName}</p>
+                    <div className="text-sm text-white bg-blue-900 px-2 rounded-sm mb-1">
+                      {item.categoryName} 1위
+                    </div>
                   )}
 
                   {/* 상품 이미지 */}
                   <img
                     src={item.productImage}
                     alt={item.productName}
-                    className="w-48 h-48 object-contain mb-4"
+                    className="w-48 h-48 object-contain mb-4 justify-self-center"
                   />
+                  {/* 가격 */}
+                  <p className="text-gray-700 font-bold mb-1 text-center">
+                    {item.productPrice.toLocaleString()}원
+                  </p>
 
-                  <div className="text-center">
-                    {/* 상품명 */}
-                    <h3 className="font-semibold text-lg mb-1 line-clamp-2">
-                      {item.productName}
-                    </h3>
+                  {/* 제목 높이 균등화용 박스 */}
+                  <h3 className="font-semibold text-lg/6 py-1 text-center line-clamp-2 break-keep min-h-[3.5rem]">
+                    {item.productName}
+                  </h3>                  
 
-                    {/* 가격 정보 */}
-                    <p className="text-gray-700 font-bold mb-1">
-                      {item.productPrice.toLocaleString()}원
-                    </p>
-
-                    {/* ✅ 요약 정보 표시 */}
-                    {item.summary ? (
-                      <div className="text-left text-sm text-gray-700 mt-3">
-                        <p className="font-semibold text-green-700">긍정리뷰</p>
-                        <ul className="list-disc list-inside mb-2">
-                          {item.summary.pros.map((p: string, i: number) => (
-                            <li key={i}>{p}</li>
-                          ))}
-                        </ul>
-                        <p className="font-semibold text-red-700">부정리뷰</p>
-                        <ul className="list-disc list-inside">
-                          {item.summary.cons.map((c: string, i: number) => (
-                            <li key={i}>{c}</li>
-                          ))}
-                        </ul>
+                  {/* 요약 */}
+                  {item.summary ? (
+                    <div className="text-left text-sm text-gray-700 mt-3 w-full">
+                      <div className="py-2 flex flex-row items-center">
+                        {/* AI 시각 애니메이션 (Siri-style) */}
+                        <div className="relative w-5 h-5 flex items-center justify-center">
+                          <svg
+                            viewBox="0 0 100 100"
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="w-full h-full"
+                          >
+                            <circle cx="50" cy="50" r="20" fill="#7e22ce" className="animate-ai-pulse" />
+                            <circle cx="50" cy="50" r="35" stroke="#c084fc" strokeWidth="2" fill="none" className="animate-ai-wave" />
+                          </svg>
+                          <style jsx>{`
+                            @keyframes aiPulse {
+                              0%, 100% { transform: scale(1); opacity: 1; }
+                              50% { transform: scale(1.1); opacity: 0.85; }
+                            }
+                            @keyframes aiWave {
+                              0% { transform: scale(0.9); opacity: 0.5; }
+                              50% { transform: scale(1.2); opacity: 1; }
+                              100% { transform: scale(0.9); opacity: 0.5; }
+                            }
+                            .animate-ai-pulse {
+                              animation: aiPulse 3s ease-in-out infinite;
+                              transform-origin: center;
+                              transform-box: fill-box;
+                              will-change: transform, opacity;
+                            }
+                            .animate-ai-wave {
+                              animation: aiWave 3s ease-in-out infinite;
+                              transform-origin: center;
+                              transform-box: fill-box;
+                              will-change: transform, opacity;
+                            }
+                          `}</style>
+                        </div>
+                        <p className="px-2">사람들은 이렇게 평가했어요</p>
                       </div>
-                    ) : (
-                      // 요약이 아직 생성되지 않은 경우
-                      <div className="animate-pulse text-gray-400 text-sm mt-3">
-                        AI가 리뷰를 분석 중입니다...
-                      </div>
-                    )}
+                      {/* <p className="font-semibold text-green-700">👍</p> */}
+                      <ul className="list-none list-inside p-2 box-border bg-gray-100 rounded-md">
+                        {item.summary.pros.map((p: string, i: number) => (
+                          <li key={i}>{p}</li>
+                        ))}
+                      </ul>
+                      <div className="w-full h-1"></div>
+                      {/* <p className="font-semibold text-red-700">부정리뷰</p> */}
+                      <ul className="list-none list-inside p-2 box-border bg-gray-300 rounded-md">
+                        {item.summary.cons.map((c: string, i: number) => (
+                          <li key={i}>{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div className="animate-pulse text-gray-400 text-sm mt-3">
+                      AI가 리뷰를 분석 중입니다...
+                    </div>
+                  )}
 
-                    {/* 쿠팡 링크 */}
-                    <a
-                      href={item.productUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                    >
-                      쿠팡에서 보기
-                    </a>
-                  </div>
+                  {/* 쿠팡 버튼 */}
+                  <a
+                    href={item.productUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-center"
+                  >
+                    쿠팡에서 보기
+                  </a>
                 </div>
               ))}
             </div>

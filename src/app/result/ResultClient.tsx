@@ -49,30 +49,67 @@ export default function ResultClient() {
   const hasFetchedSummary = useRef(false);
   const [currentSummarizing, setCurrentSummarizing] = useState<string>("");
 
-  // ✅ 1단계: 검색어 변경 시 상품 검색
+  // ✅ 1단계: 검색어 변경 시 상품 검색 (스트리밍 수신)
   useEffect(() => {
     if (!keyword) return;
 
-    const fetchResults = async () => {
-      setLoading(true);
-      hasFetchedSummary.current = false;
-      try {
-        console.log("🔍 검색 실행:", keyword);
-        const res = await axios.post("/api/search", { keyword: keyword.trim() });
-        const results = res.data.results || [];
+    hasFetchedSummary.current = false;
+    setLoading(true);
+    setItems([]); // 초기화
 
-        setItems(results);
-        setTotal(results.length);
-        setProgress(0);
+    (async () => {
+      try {
+        const res = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ keyword: keyword.trim() }),
+        });
+
+        if (!res.body) throw new Error("No response body");
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const data = JSON.parse(line);
+
+            if (data.partial) {
+              setItems((prev) => {
+                const updated = [...prev, data.partial];
+                // ✅ 상품 수신 시마다 진행률 업데이트
+                setProgress(updated.length);
+                return updated;
+              });
+            } else if (data.total) {
+              // ✅ 서버에서 총 개수 전달받으면 total 설정
+              setTotal(data.total);
+            } else if (data.done) {
+              setLoading(false);
+            } else if (data.error) {
+              console.error("❌ 검색 오류:", data.error);
+              setDiag("검색 중 오류가 발생했습니다.");
+              setLoading(false);
+            }
+          }
+        }
+
+        setLoading(false);
       } catch (err) {
-        console.error("❌ 검색 에러:", err);
-        setDiag("검색 중 오류가 발생했습니다.");
-      } finally {
+        console.error("❌ 스트리밍 수신 오류:", err);
+        setDiag("검색 데이터를 불러오는 중 문제가 발생했습니다.");
         setLoading(false);
       }
-    };
-
-    fetchResults();
+    })();
   }, [keyword]);
 
   // ---------------------------------------------------------------------------
@@ -86,61 +123,59 @@ export default function ResultClient() {
     if (items.length === 0 || hasFetchedSummary.current) return;
     hasFetchedSummary.current = true;
 
-    const limit = 3; // 동시에 처리할 최대 요청 수
-    let active = 0;
-    let index = 0;
+    const startSummaries = () => {
+      const limit = 3;
+      let active = 0;
+      let index = 0;
 
-    const runNext = async () => {
-      if (index >= items.length) return; // ✅ 모든 상품을 다 돌았으면 종료
+      const runNext = async () => {
+        if (index >= items.length) return;
+        const product = items[index++];
+        if (!product.productName) return runNext();
 
-      const product = items[index++]; // 다음 상품 하나를 꺼냄
-      if (!product.productName) return runNext(); // 이름 없으면 스킵
+        active++;
+        setCurrentSummarizing(product.productName);
 
-      active++;
-      setCurrentSummarizing(product.productName);
-
-      try {
-        console.log("🧠 요약 시작:", product.productName);
-        // ✅ summary API 호출 (제네릭 타입 지정)
-        const res = await axios.post<SummaryResponse[]>("/api/summary", {
-          productName: product.productName,
-        });
-        const summaryData = Array.isArray(res.data) ? res.data[0] : res.data;
-
-        // ✅ 요청이 끝난 상품을 즉시 갱신하고, 요약 완료된 상품을 상단으로 정렬
-        setItems((prev) => {
-          // 1. pros, cons만 업데이트하여 불필요한 데이터 변경 최소화
-          const updated = prev.map((p) =>
-            p.productName === product.productName
-              ? { ...p, pros: summaryData?.pros || [], cons: summaryData?.cons || [] }
-              : p
-          );
-
-          // 2. 요약이 완료된 상품을 상단으로 이동시켜 시각적 진행감 제공
-          return updated.sort((a, b) => {
-            const aDone = a.pros?.length ? 1 : 0;
-            const bDone = b.pros?.length ? 1 : 0;
-            return bDone - aDone; // pros가 있는 항목을 앞으로
+        try {
+          const res = await axios.post<SummaryResponse[]>("/api/summary", {
+            productName: product.productName,
           });
-        });
-      } catch (err) {
-        console.error("❌ 요약 실패:", err);
-      } finally {
-        // ✅ 성공/실패와 관계없이 진행률 1 증가
-        setProgress((prev) => prev + 1);
-        active--;
-        runNext(); // 다음 상품 요약 시작
+          const summaryData = Array.isArray(res.data) ? res.data[0] : res.data;
 
-        // ✅ 모든 요약이 끝났을 때 현재 상품 이름 초기화
-        if (index >= items.length && active === 0) {
-          setCurrentSummarizing("");
+          setItems((prev) => {
+            const updated = prev.map((p) =>
+              p.productName === product.productName
+                ? { ...p, pros: summaryData?.pros || [], cons: summaryData?.cons || [] }
+                : p
+            );
+
+            return updated.sort((a, b) => {
+              const aDone = a.pros?.length ? 1 : 0;
+              const bDone = b.pros?.length ? 1 : 0;
+              return bDone - aDone;
+            });
+          });
+        } catch (err) {
+          console.error("❌ 요약 실패:", err);
+        } finally {
+          active--;
+          runNext();
+
+          if (index >= items.length && active === 0) {
+            setCurrentSummarizing("");
+          }
         }
+      };
+
+      for (let i = 0; i < limit; i++) {
+        runNext();
       }
     };
 
-    // ✅ 동시에 limit 개의 요청 실행
-    for (let i = 0; i < limit; i++) {
-      runNext();
+    if ("requestIdleCallback" in window) {
+      (window as any).requestIdleCallback(startSummaries);
+    } else {
+      setTimeout(startSummaries, 50); // fallback for browsers without requestIdleCallback
     }
   }, [items]);
 
@@ -155,7 +190,7 @@ export default function ResultClient() {
       </h1>
 
       {/* 🔹 로딩 상태 */}
-      {loading && (
+      {loading && items.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-gray-600">
           <div className="w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mb-3"></div>
           <p className="text-sm mb-2">Refilter가 상품을 불러오고 있어요...</p>
