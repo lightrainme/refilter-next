@@ -18,6 +18,9 @@ export default function SearchPage() {
   // ✅ 베스트 상품 목록 상태
   const [cards, setCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true); // 로딩 상태 추가
+  // ✅ Coupang 카테고리 목록 상태
+  const [categories, setCategories] = useState<any[]>([]);
+  const [catLoading, setCatLoading] = useState(true);
 
   const router = useRouter();
 
@@ -28,7 +31,7 @@ export default function SearchPage() {
     router.push(`/result?keyword=${encodeURIComponent(keyword.trim())}`);
   };
 
-  // ✅ 페이지 마운트 시 베스트상품 불러오기
+  // ✅ 페이지 마운트 시 베스트상품 불러오기 및 카테고리 목록 불러오기
   useEffect(() => {
     const fetchBestProducts = async () => {
       try {
@@ -42,6 +45,19 @@ export default function SearchPage() {
       }
     };
     fetchBestProducts();
+
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch('/api/categories/list');
+        const data = await res.json();
+        setCategories(data.categories || []);
+      } catch (err) {
+        console.error('🔥 Failed to fetch category list:', err);
+      } finally {
+        setCatLoading(false);
+      }
+    };
+    fetchCategories();
   }, []);
 
   // ✅ JSX 렌더링
@@ -94,6 +110,41 @@ export default function SearchPage() {
           </button>
         </form>
 
+        {/* 🔵 Coupang Category Viewer */}
+        <section className="mb-16">
+
+          {catLoading ? (
+            <p className="text-center text-gray-500">카테고리를 불러오는 중...</p>
+          ) : categories.length === 0 ? (
+            <p className="text-center text-gray-400">카테고리 데이터 없음</p>
+          ) : (
+            <div className="flex flex-row justify-center flex-wrap gap-2 p-1 rounded-md max-h-64 overflow-auto box-border cursor-pointer">
+              {/* 
+                🔍 categories.map()
+                - categories 배열을 순회하면서 각 카테고리(cat)를 하나씩 꺼냄
+                - map()은 배열의 길이만큼 반복되며, 각 반복에서 JSX 요소를 "반환"하면
+                  → 그 요소들이 배열 형태로 React에 전달되어 렌더링됨
+                - idx: 현재 반복의 인덱스(0,1,2,...). key로 사용하여 React가 각 요소를 식별하도록 함
+              */}
+              {categories.map(
+                (
+                  cat: any,      // cat: 현재 순회 중인 카테고리 객체 { name: "...", id: ... }
+                  idx: number    // idx: map 반복 인덱스
+                ) => (
+                  <span
+                    key={idx}    // React가 각 태그를 식별하기 위한 key (배열 렌더링 필수!)
+                    className="px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-sm whitespace-nowrap hover:bg-purple-200 cursor-pointer"
+                    onClick={() => router.push(`/result?category=${encodeURIComponent(cat.name)}`)}  // 카테고리 클릭 시 이동
+                  >
+                    {/* cat.name → 카테고리 이름 문자열 */}
+                    {cat.name}
+                  </span>
+                )
+              )}
+            </div>
+          )}
+        </section>
+
         {/* ==========================================================
             🟡 [카테고리 베스트 상품 섹션]
            ========================================================== */}
@@ -145,7 +196,7 @@ export default function SearchPage() {
                   {/* 요약 */}
                   {item.summary ? (
                     <div className="text-left text-sm text-gray-700 mt-3 w-full">
-                      <div className="py-2 flex flex-row items-center">
+                      <div className="py-2 pl-2 flex flex-row items-center bg-black rounded-full box-border">
                         {/* AI 시각 애니메이션 (Siri-style) */}
                         <div className="relative w-5 h-5 flex items-center justify-center">
                           <svg
@@ -180,7 +231,7 @@ export default function SearchPage() {
                             }
                           `}</style>
                         </div>
-                        <p className="px-2">사람들은 이렇게 평가했어요</p>
+                        <p className="px-2 text-white">사람들은 이렇게 평가했어요</p>
                       </div>
                       {/* <p className="font-semibold text-green-700">👍</p> */}
                       <ul className="list-none list-inside p-2 box-border bg-gray-100 rounded-md">

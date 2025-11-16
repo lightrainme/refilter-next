@@ -38,7 +38,8 @@ type SummaryResponse = {
 export default function ResultClient() {
   // ✅ URL에서 검색어 추출
   const searchParams = useSearchParams();
-  const keyword = decodeURIComponent(searchParams?.get("keyword") || "");
+  const product = decodeURIComponent(searchParams?.get("product") || "");
+  const category = decodeURIComponent(searchParams?.get("category") || "");
 
   // ✅ 상태 정의
   const [items, setItems] = useState<Product[]>([]);
@@ -51,7 +52,7 @@ export default function ResultClient() {
 
   // ✅ 1단계: 검색어 변경 시 상품 검색 (스트리밍 수신)
   useEffect(() => {
-    if (!keyword) return;
+    if (!product && !category) return;
 
     hasFetchedSummary.current = false;
     setLoading(true);
@@ -59,10 +60,30 @@ export default function ResultClient() {
 
     (async () => {
       try {
+        // 🔵 카테고리만 있을 때 → TOP10 API 호출
+        if (category && !product) {
+          const topRes = await fetch(
+            `/api/categories/top-products?category=${encodeURIComponent(category)}`
+          );
+          const topJson = await topRes.json();
+
+          if (topJson?.products) {
+            setItems(topJson.products);
+            setTotal(topJson.products.length);
+          }
+
+          setLoading(false);
+          return;
+        }
+
+        // 🔵 product 검색 or category+product 동시 검색 → 기존 스트리밍 검색
         const res = await fetch("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ keyword: keyword.trim() }),
+          body: JSON.stringify({
+            product: product.trim(),
+            category: category.trim(),
+          }),
         });
 
         if (!res.body) throw new Error("No response body");
@@ -86,12 +107,10 @@ export default function ResultClient() {
             if (data.partial) {
               setItems((prev) => {
                 const updated = [...prev, data.partial];
-                // ✅ 상품 수신 시마다 진행률 업데이트
                 setProgress(updated.length);
                 return updated;
               });
             } else if (data.total) {
-              // ✅ 서버에서 총 개수 전달받으면 total 설정
               setTotal(data.total);
             } else if (data.done) {
               setLoading(false);
@@ -110,7 +129,7 @@ export default function ResultClient() {
         setLoading(false);
       }
     })();
-  }, [keyword]);
+  }, [product, category]);
 
   // ---------------------------------------------------------------------------
   // [요약 단계 useEffect]
@@ -186,7 +205,10 @@ export default function ResultClient() {
   return (
     <main className="max-w-5xl mx-auto px-4 py-6">
       <h1 className="text-md font-semibold mb-4">
-        <span className="text-blue-700">{keyword}</span> 의 검색결과입니다
+        <span className="text-blue-700">
+          {category ? `${category} 카테고리` : product}
+        </span>
+        의 결과입니다
       </h1>
 
       {/* 🔹 로딩 상태 */}

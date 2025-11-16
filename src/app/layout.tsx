@@ -66,7 +66,6 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased w-screen h-screen bg-gray-100`}
       >
         <div className="flex">
-          <Sidebar categories={categories} />
           <LayoutWrapper>{children}</LayoutWrapper>
         </div>
         <Footer />
