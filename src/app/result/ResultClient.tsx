@@ -36,10 +36,56 @@ type SummaryResponse = {
 };
 
 export default function ResultClient() {
+  // 🚫 SSR(prefetch) 단계에서는 ResultClient를 렌더링하지 않음 → trend API가 빈 category로 호출되는 문제 방지
+  if (typeof window === "undefined") return null;
   // ✅ URL에서 검색어 추출
   const searchParams = useSearchParams();
-  const product = decodeURIComponent(searchParams?.get("product") || "");
+
+  const rawKeyword =
+    searchParams?.get("product") ||
+    searchParams?.get("keyword") ||
+    "";
+
+  const product = decodeURIComponent(rawKeyword);
+
+  // 🔥 URL에 keyword가 없고 category만 있을 경우 → trend API로 keyword를 자동 생성
+  const [trendKeyword, setTrendKeyword] = useState("");
   const category = decodeURIComponent(searchParams?.get("category") || "");
+  const trendCalled = useRef(false); // 🔒 Trend API 중복 호출 방지용
+
+  useEffect(() => {
+  // 🚫 product가 있으면 trend 사용 금지 (검색어 우선)
+  if (product && product.trim()) return;
+
+  // 🚫 category가 완전히 준비되지 않은 경우 호출 금지
+  if (!category || !category.trim()) return;
+
+  // 🚫 Next.js hydration 초기 상태 → "%EA..." 같은 raw 인코딩 값이 들어옴
+  // 이런 값은 trend 호출 금지
+  if (category.startsWith("%") || category.length < 2) return;
+
+  // 🚫 trendKeyword가 이미 생성되었으면 재호출 금지
+  if (trendKeyword && trendKeyword.trim()) return;
+
+  // 🚫 StrictMode 두 번 호출 방지
+  if (trendCalled.current) return;
+  trendCalled.current = true;
+
+  (async () => {
+    try {
+      const res = await fetch("/api/categories/trend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryName: category }), // 🔥 category → categoryName으로 정확하게 전달
+      });
+      const json = await res.json();
+      const tk = json.trendKeyword || "";
+      setTrendKeyword(tk);
+    } catch (err) {
+      console.error("❌ Trend keyword fetch error:", err);
+    }
+  })();
+}, [product, category, trendKeyword]);
 
   // ✅ 상태 정의
   const [items, setItems] = useState<Product[]>([]);
@@ -60,16 +106,45 @@ export default function ResultClient() {
 
     (async () => {
       try {
-        // 🔵 카테고리만 있을 때 → TOP10 API 호출
+        // 🔵 category만 있고 product(검색어)가 없는 경우 → trend keyword로 검색 실행
         if (category && !product) {
-          const topRes = await fetch(
-            `/api/categories/top-products?category=${encodeURIComponent(category)}`
-          );
-          const topJson = await topRes.json();
+          if (!trendKeyword) return; // trendKeyword 로딩될 때까지 대기
 
-          if (topJson?.products) {
-            setItems(topJson.products);
-            setTotal(topJson.products.length);
+          const res = await fetch("/api/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              keyword: trendKeyword.trim(),
+              category: category.trim(),
+            }),
+          });
+
+          if (!res.body) throw new Error("No response body");
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              const data = JSON.parse(line);
+
+              if (data.partial) {
+                setItems((prev) => [...prev, data.partial]);
+              } else if (data.total) {
+                setTotal(data.total);
+              } else if (data.done) {
+                setLoading(false);
+              }
+            }
           }
 
           setLoading(false);
@@ -81,7 +156,8 @@ export default function ResultClient() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            product: product.trim(),
+            // ✅ search API는 keyword 필드를 기대하므로 keyword로 전달
+            keyword: product.trim(),
             category: category.trim(),
           }),
         });
@@ -107,7 +183,6 @@ export default function ResultClient() {
             if (data.partial) {
               setItems((prev) => {
                 const updated = [...prev, data.partial];
-                setProgress(updated.length);
                 return updated;
               });
             } else if (data.total) {
@@ -129,7 +204,7 @@ export default function ResultClient() {
         setLoading(false);
       }
     })();
-  }, [product, category]);
+  }, [product, category, trendKeyword]);
 
   // ---------------------------------------------------------------------------
   // [요약 단계 useEffect]
@@ -168,6 +243,13 @@ export default function ResultClient() {
                 : p
             );
 
+            // compute completed summary count
+            const completeCount = updated.filter(it =>
+              (Array.isArray(it.pros) && it.pros.length > 0) ||
+              (Array.isArray(it.cons) && it.cons.length > 0)
+            ).length;
+            setProgress(completeCount);
+
             return updated.sort((a, b) => {
               const aDone = a.pros?.length ? 1 : 0;
               const bDone = b.pros?.length ? 1 : 0;
@@ -205,10 +287,11 @@ export default function ResultClient() {
   return (
     <main className="max-w-5xl mx-auto px-4 py-6">
       <h1 className="text-md font-semibold mb-4">
-        <span className="text-blue-700">
-          {category ? `${category} 카테고리` : product}
-        </span>
-        의 결과입니다
+        {category ? (
+          <span className="text-blue-700">{category} 카테고리 결과</span>
+        ) : (
+          <span className="text-blue-700">"{product}" 검색 결과</span>
+        )}
       </h1>
 
       {/* 🔹 로딩 상태 */}
@@ -244,6 +327,11 @@ export default function ResultClient() {
           {currentSummarizing && (
             <p className="text-[11px] text-blue-500 italic mt-1">
               지금 <span className="font-semibold">{currentSummarizing}</span> 요약 중...
+            </p>
+          )}
+          {progress === total && total > 0 && (
+            <p className="text-green-600 text-xs font-semibold mt-2">
+              🎉 모든 상품의 요약이 완료되었습니다!
             </p>
           )}
         </div>
@@ -354,12 +442,6 @@ export default function ResultClient() {
               );
             })}
           </ul>
-
-          {progress === total && total > 0 && (
-            <p className="text-center text-green-600 mt-4 text-sm">
-              모든 상품의 요약이 완료되었습니다 🎉
-            </p>
-          )}
         </>
       )}
     </main>

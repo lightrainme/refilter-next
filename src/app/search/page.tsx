@@ -134,7 +134,28 @@ export default function SearchPage() {
                   <span
                     key={idx}    // React가 각 태그를 식별하기 위한 key (배열 렌더링 필수!)
                     className="px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-sm whitespace-nowrap hover:bg-purple-200 cursor-pointer"
-                    onClick={() => router.push(`/result?category=${encodeURIComponent(cat.name)}`)}  // 카테고리 클릭 시 이동
+                    onClick={async () => {
+                      try {
+                        // 🟣 1) GPT 기반 트렌드 키워드 생성 API 호출
+                        const res = await fetch('/api/categories/trend', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ categoryName: cat.name }) // 선택된 카테고리 이름 전달
+                        });
+
+                        const data = await res.json();
+
+                        // 🟡 2) 트렌드 키워드 검증
+                        if (!data.trendKeyword) throw new Error('트렌드 키워드를 불러오지 못했습니다.');
+
+                        // 🟢 3) result 페이지로 이동 (카테고리만)
+                        router.push(
+                          `/result?category=${encodeURIComponent(cat.name)}`
+                        );
+                      } catch (error) {
+                        console.error('🔥 트렌드 키워드 생성 실패:', error);
+                      }
+                    }}
                   >
                     {/* cat.name → 카테고리 이름 문자열 */}
                     {cat.name}

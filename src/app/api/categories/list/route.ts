@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const filePath = path.join(process.cwd(), "data/coupang/categories-latest.json");
+    const filePath = path.join(process.cwd(), "src/data/categoryMap.json");
 
     const raw = fs.readFileSync(filePath, "utf8"); // Node 내장함수: 파일 읽기
     const categories = JSON.parse(raw);            // JSON.parse: 문자열 → 객체

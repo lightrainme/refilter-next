@@ -121,46 +121,7 @@ export async function POST(req: NextRequest) {
   });
 }
 
-// ✅ GET 요청도 지원하도록 별도 핸들러 추가
-// 클라이언트에서 쿼리 파라미터를 직접 전달할 경우 사용됩니다.
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const keyword = searchParams.get("keyword") || "";
-  const limit = searchParams.get("limit") || "10";
-  const subId = process.env.COUPANG_SUB_ID || "";
-
-  if (!keyword) {
-    return NextResponse.json({ error: "keyword is required" }, { status: 400 });
-  }
-
-  const method = "GET";
-  const pathUrl = `/v2/providers/affiliate_open_api/apis/openapi/v1/products/search?keyword=${encodeURIComponent(
-    keyword
-  )}&limit=${limit}&subId=${subId}`;
-  const { authorization } = generateHmac(method, pathUrl);
-
-  try {
-    const coupangRes = await axios.get(`https://api-gateway.coupang.com${pathUrl}`, {
-      headers: {
-        Authorization: authorization,
-        "Content-Type": "application/json",
-      },
-    });
-
-    const allProducts = coupangRes.data?.data?.productData || [];
-    const products = allProducts.filter((p: any) => !p.isAdvertisingProduct).slice(0, 10);
-
-    const cache = loadCache();
-
-    const enriched = products.map((product: any) => {
-      const name = product.productName;
-      const summary = cache[name] || { pros: [], cons: [] };
-      return { ...product, summary };
-    });
-
-    return NextResponse.json({ results: enriched }, { status: 200 });
-  } catch (error: any) {
-    console.error("❌ Search API Error:", error.response?.data || error.message);
-    return NextResponse.json({ error: "쿠팡 검색 API 요청 실패" }, { status: 500 });
-  }
+export async function GET() {
+  // ✅ Next.js prefetch가 GET /api/search를 호출할 때 400 오류를 막기 위한 안전한 응답
+  return NextResponse.json({ ok: true });
 }
