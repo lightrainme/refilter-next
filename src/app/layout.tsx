@@ -1,21 +1,14 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import Sidebar from "../components/Sidebar";
 import Footer from "../components/Footer";
 import LayoutWrapper from "../components/LayoutWrapper";
 import ServiceWorkerRegister from "../components/ServiceWorkerRegister";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+// ❌ Google Fonts용 Geist import 삭제
+// import { Geist, Geist_Mono } from 'next/font/google';
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
+// ❌ Geist 관련 설정도 전부 삭제
 
 export const metadata: Metadata = {
   title: "진짜 Re뷰만 모으는 Refilter",
@@ -62,9 +55,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/android-chrome-512x512.png" />
       </head>
 
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased w-screen h-screen bg-gray-100`}
-      >
+      <body>
         <div>
           <LayoutWrapper>{children}</LayoutWrapper>
         </div>
